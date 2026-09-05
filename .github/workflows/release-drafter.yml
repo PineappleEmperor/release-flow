@@ -64,7 +64,8 @@ jobs:
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Generate notes grouped by commit type
+      - id: notes
+        name: Generate notes grouped by commit type
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -80,6 +81,7 @@ jobs:
             RANGE="$(git rev-list --max-parents=0 HEAD | tail -1)..HEAD"
             PREV_ARG=()
           fi
+          echo "previous=$PREV" >> "$GITHUB_OUTPUT"
           BASE_V=$(python3 .release-flow/scripts/draft_version.py --base "$V")
           gh release view "v$BASE_V" >/dev/null 2>&1 \
             || gh release create "v$BASE_V" --draft --title "v$BASE_V" --notes "pending"
@@ -117,5 +119,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           V: ${{ steps.ver.outputs.version }}
+          PREV: ${{ steps.notes.outputs.previous }}
         run: |
-          python3 .release-flow/scripts/check_release_notes.py --tag "v$V" --version "$V"
+          FIRST=()
+          [ -n "$PREV" ] || FIRST=(--first-release)
+          python3 .release-flow/scripts/check_release_notes.py --tag "v$V" --version "$V" "${FIRST[@]}"
