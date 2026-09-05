@@ -93,13 +93,12 @@ called workflow can only downgrade what its caller grants), a short job id, and 
 ```yaml
 jobs:
   pr:
-    uses: PineappleEmperor/release-flow/.github/workflows/pr-checks.yml@0000000000000000000000000000000000000000 # v1.0.0
+    uses: PineappleEmperor/release-flow/.github/workflows/pr-checks.yml@709ad02eccec820cb882744c06a25ca3ea4a9169 # v1.0.0rc1
 ```
 
-The all-zeros SHA in every pointer is a placeholder, the only one this design
-tolerates: it is replaced by the commit SHA of this repository's first tag, and
-from then on Dependabot moves the SHA and the version comment together. No other pin
-in this repository or in a consumer is a placeholder. The
+The SHA is the commit a tag of this repository points at and the comment is that tag;
+Dependabot moves the two together. No pin in this repository or in a consumer is ever a
+placeholder. The
 `pr-checks` pointer also carries the `concurrency` group and the event `types`
 list, because both are keyed on the triggering event and belong with the
 trigger. `labeled`/`unlabeled` are deliberately excluded from those `types`:

@@ -1,5 +1,4 @@
 # Copy to .github/workflows/lint-pr.yml in the consuming repository.
-# The all-zeros SHA is a placeholder: README.md, "The pointers".
 name: Lint PR
 
 on:
@@ -12,4 +11,4 @@ jobs:
   lint:
     permissions:
       pull-requests: read
-    uses: PineappleEmperor/release-flow/.github/workflows/lint-pr.yml@0000000000000000000000000000000000000000 # v1.0.0
+    uses: PineappleEmperor/release-flow/.github/workflows/lint-pr.yml@709ad02eccec820cb882744c06a25ca3ea4a9169 # v1.0.0rc1

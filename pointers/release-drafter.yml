@@ -1,5 +1,4 @@
 # Copy to .github/workflows/release-drafter.yml in the consuming repository.
-# The all-zeros SHA is a placeholder: README.md, "The pointers".
 name: Release Drafter
 
 on:
@@ -14,4 +13,4 @@ permissions:
 
 jobs:
   release:
-    uses: PineappleEmperor/release-flow/.github/workflows/release-drafter.yml@0000000000000000000000000000000000000000 # v1.0.0
+    uses: PineappleEmperor/release-flow/.github/workflows/release-drafter.yml@709ad02eccec820cb882744c06a25ca3ea4a9169 # v1.0.0rc1
