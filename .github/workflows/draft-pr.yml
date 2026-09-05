@@ -1,0 +1,15 @@
+name: Draft PR
+
+# Documented in README.md.
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    uses: ./.github/workflows/auto-draft-pr.yml
+    secrets:
+      release-token: ${{ secrets.RELEASE_TOKEN }}

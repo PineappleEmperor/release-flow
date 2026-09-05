@@ -1,0 +1,157 @@
+name: PR Checks
+
+# Documented in README.md.
+on:
+  workflow_call:
+
+jobs:
+  # ---------------------------------------------------------------- label ----
+  label:
+    name: CC labelling
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: release-drafter/release-drafter/autolabeler@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove superseded type labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: ${{ github.event.pull_request.title }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if   printf '%s' "$TITLE" | grep -qiE '^[a-z]+(\([^)]*\))?!:';        then WIN=xfeat
+          elif printf '%s' "$TITLE" | grep -qiE '^(chore|docs|refactor|perf|test|build|ci|style)(\([^)]*\))?:'; then WIN=chore
+          elif printf '%s' "$TITLE" | grep -qiE '^fix(\([^)]*\))?:';            then WIN=fix
+          elif printf '%s' "$TITLE" | grep -qiE '^(feat|feature)(\([^)]*\))?:'; then WIN=feature
+          else exit 0
+          fi
+          CURRENT=$(gh pr view "$PR" --json labels --jq '.labels[].name')
+          for L in xfeat feature fix chore; do
+            [ "$L" = "$WIN" ] && continue
+            if printf '%s\n' "$CURRENT" | grep -qx "$L"; then
+              gh pr edit "$PR" --remove-label "$L"
+            fi
+          done
+
+  # ----------------------------------------------------------- title-check ----
+  title-check:
+    name: CC label validation
+    needs: label
+    if: github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: PineappleEmperor/release-flow
+          ref: ${{ github.job_workflow_sha }}
+          path: .release-flow
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: The label must match what the commits entitle the PR to
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/$GH_REPO/pulls/$PR/commits" \
+            --jq '.[].commit.message | split("\n")[0]' > subjects.txt
+          EXPECTED=$(python3 .release-flow/scripts/commit_summary.py --mode label --subjects subjects.txt)
+          ACTUAL=$(gh pr view "$PR" --json labels \
+            --jq '[.labels[].name | select(test("^(xfeat|feature|fix|chore)$"))] | unique | join(" ")' || true)
+          echo "expected=$EXPECTED" >> "$GITHUB_OUTPUT"
+          echo "actual=$ACTUAL" >> "$GITHUB_OUTPUT"
+          if [ "$ACTUAL" = "$EXPECTED" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            echo "PR carries '$EXPECTED', which is what its commits entitle it to."
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::error::label is '${ACTUAL:-none}' but these commits entitle this PR to '$EXPECTED'."
+          fi
+
+      - name: Say what the title should be, then fail
+        if: steps.check.outputs.ok == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          EXPECTED: ${{ steps.check.outputs.expected }}
+          ACTUAL: ${{ steps.check.outputs.actual }}
+        run: |
+          WIN=$(python3 .release-flow/scripts/commit_summary.py --mode winning --subjects subjects.txt)
+          python3 - "$WIN" "$EXPECTED" "${ACTUAL:-none}" > comment.md <<'PYS'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location("cs", ".release-flow/scripts/commit_summary.py")
+          cs = importlib.util.module_from_spec(spec); spec.loader.exec_module(cs)
+          title, category, bump = cs.SUGGESTIONS[sys.argv[1]]
+          expected, actual = sys.argv[2], sys.argv[3]
+          print(f"""<!-- pr-title-check -->
+          ### This PR's label does not match its commits
+
+          Label carried: **{actual}** — label its commits entitle it to: **{expected}**.
+
+          The label is applied from the TITLE, and it decides the release category and the
+          version bump. When the title understates the commits the change ships under the
+          wrong heading with the wrong bump — a breaking change released as a patch is the
+          case this exists to stop.
+
+          **Retitle as {title}** — files under *{category}*, resolves a **{bump}** bump.
+
+          Fix the title and this check goes green; the comment removes itself. Nothing here
+          edits your title, and hand-patching the label will not help — the autolabeler
+          rewrites it from the title on the next push.""".replace(chr(10) + " " * 10, chr(10)))
+          PYS
+          EXISTING=$(gh api "repos/$GH_REPO/issues/$PR/comments" \
+            --jq '[.[] | select(.body | startswith("<!-- pr-title-check -->"))] | .[0].id // ""')
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$EXISTING" -F body=@comment.md --silent
+          else
+            gh pr comment "$PR" --body-file comment.md
+          fi
+          exit 1
+
+      - name: Withdraw the suggestion once the label is right
+        if: steps.check.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          EXISTING=$(gh api "repos/$GH_REPO/issues/$PR/comments" \
+            --jq '[.[] | select(.body | startswith("<!-- pr-title-check -->"))] | .[0].id // ""')
+          [ -n "$EXISTING" ] && gh api -X DELETE "repos/$GH_REPO/issues/comments/$EXISTING" --silent \
+            && echo "removed the stale suggestion" || echo "nothing to withdraw"
+
+      - name: Say what version this PR implies
+        if: steps.check.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          EXPECTED: ${{ steps.check.outputs.expected }}
+        run: |
+          LAST=$(gh release list --exclude-drafts --limit 30 --json tagName,isPrerelease \
+            --jq '.[] | select(.isPrerelease == false) | .tagName' | head -1)
+          LAST="${LAST#v}"
+          [ -n "$LAST" ] || LAST="0.0.0"
+          NEXT=$(python3 .release-flow/scripts/manifest_gate.py --suggest --last-release "$LAST" --labels "$EXPECTED")
+          echo "::notice::label '$EXPECTED' implies the next release is ${NEXT} (currently v${LAST})"
+          {
+            echo "### Next release"
+            echo
+            echo "| current | label | implies |"
+            echo "|---|---|---|"
+            echo "| v${LAST} | ${EXPECTED} | ${NEXT} |"
+          } >> "$GITHUB_STEP_SUMMARY"

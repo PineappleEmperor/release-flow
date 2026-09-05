@@ -1,0 +1,58 @@
+name: Draft PR
+
+# Documented in README.md.
+on:
+  workflow_call:
+    secrets:
+      release-token:
+        description: A PAT or app token with contents+pull-requests write; opens the draft PR
+        required: true
+
+jobs:
+  draft:
+    name: Auto draft PR
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: PineappleEmperor/release-flow
+          ref: ${{ github.job_workflow_sha }}
+          path: .release-flow
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Open a draft PR if none exists
+        env:
+          GH_TOKEN: ${{ secrets.release-token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          BASE: ${{ github.event.repository.default_branch }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::release-token is empty (the pointer passes a secret that is not set); no draft PR was opened"
+            exit 0
+          fi
+          EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            echo "::notice::PR #$EXISTING already open for $BRANCH"
+            exit 0
+          fi
+          git log --format=%s "origin/$BASE..HEAD" > subjects.txt
+          if [ ! -s subjects.txt ]; then
+            echo "::notice::no commits ahead of $BASE; nothing to open"
+            exit 0
+          fi
+          TITLE=$(python3 .release-flow/scripts/commit_summary.py --mode title --subjects subjects.txt)
+          gh pr create --draft --base "$BASE" --head "$BRANCH" \
+            --title "$TITLE" --body ""

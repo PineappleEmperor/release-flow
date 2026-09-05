@@ -1,0 +1,23 @@
+name: PR Checks
+
+# Documented in README.md.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr:
+    uses: ./.github/workflows/pr-checks.yml
+
+  lint:
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/lint-pr.yml

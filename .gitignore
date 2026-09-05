@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+
+# Repo-local scratch: clones, fixtures, throwaway copies.
+.tmp/
+
+# The checkout the reusable workflows make of this repository; README.md says why.
+.release-flow/
