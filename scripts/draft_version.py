@@ -2,7 +2,7 @@
 """The version a release draft is held to while a prerelease line is open.
 
 Usage:
-    gh release list --exclude-drafts --limit 1 --json tagName,isPrerelease |
+    gh release list --exclude-drafts --limit 20 --json tagName,isPrerelease,publishedAt |
         draft_version.py                   # the base version, or nothing
     draft_version.py --base v1.2.0rc3      # 1.2.0
 """
@@ -22,10 +22,10 @@ def base(version: str) -> str:
 
 
 def pinned_version(releases: list[dict]) -> str:
-    """The base of the newest published release when it is a prerelease, else ""."""
+    """The base of the most recently published release when it is a prerelease, else ""."""
     if not releases:
         return ""
-    newest = releases[0]
+    newest = max(releases, key=lambda r: r.get("publishedAt") or "")
     if not newest.get("isPrerelease"):
         return ""
     return base(newest["tagName"])

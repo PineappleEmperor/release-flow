@@ -44,6 +44,25 @@ def test_an_rc_line_after_a_final_pins_the_rc_base() -> None:
     assert dv.pinned_version(releases) == "2.0.0"
 
 
+def test_newest_means_most_recently_published_not_first_listed() -> None:
+    """The first-listed release is an rc; a final was published after it."""
+
+    def rel(tag: str, pre: bool, at: str) -> dict:
+        return {"tagName": tag, "isPrerelease": pre, "publishedAt": at}
+
+    releases = [
+        rel("v0.3.0rc1", True, "2026-09-06T08:05:00Z"),
+        rel("v0.3.0", False, "2026-09-06T08:40:00Z"),
+        rel("v0.2.1", False, "2026-09-04T19:26:38Z"),
+    ]
+    assert dv.pinned_version(releases) == ""
+    later_rc = [
+        rel("v0.3.0", False, "2026-09-06T08:40:00Z"),
+        rel("v0.4.0rc1", True, "2026-09-07T10:00:00Z"),
+    ]
+    assert dv.pinned_version(later_rc) == "0.4.0"
+
+
 def test_base_of_a_version() -> None:
     """`--base` strips any prerelease suffix and the `v`."""
     assert dv.base("v1.0.0rc2") == "1.0.0"

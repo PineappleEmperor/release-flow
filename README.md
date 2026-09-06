@@ -57,7 +57,8 @@ each carries a semver-increment and the highest one since the last release
 wins — and maintains a draft; nothing in this repository carries a
 hand-written version, and a consumer that needs the number in a file writes it
 there when the release publishes. release-drafter counts only full releases as
-"the last release", so a repository whose newest published release is a prerelease
+"the last release", so a repository whose most recently published release (by publish
+time, since an rc and its final are created together) is a prerelease
 would resolve from nothing and draft `v0.0.1`; `draft_version.py` therefore holds
 the draft to that line's base version while it is open (`v1.0.0rc1` keeps the draft
 at `v1.0.0`), and the labels take over again once a full release exists. Publishing a

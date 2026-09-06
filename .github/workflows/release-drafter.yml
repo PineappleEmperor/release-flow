@@ -35,7 +35,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          V=$(gh release list --exclude-drafts --limit 1 --json tagName,isPrerelease \
+          V=$(gh release list --exclude-drafts --limit 20 --json tagName,isPrerelease,publishedAt \
             | python3 .release-flow/scripts/draft_version.py)
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
