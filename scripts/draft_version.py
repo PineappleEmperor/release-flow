@@ -2,7 +2,7 @@
 """The version a release draft is held to while a prerelease line is open.
 
 Usage:
-    gh release list --exclude-drafts --limit 100 --json tagName,isPrerelease,publishedAt |
+    gh release list --exclude-drafts --json tagName,isPrerelease,publishedAt |
         draft_version.py                   # the base version, or nothing
     draft_version.py --base v1.2.0rc3      # 1.2.0
 """
@@ -34,6 +34,9 @@ def pinned_version(releases: list[dict]) -> str:
     Among candidates the newest is the one published last. An rc and its final draft are
     created in the same run, so creation order says nothing about which came out first.
     """
+    # The workflow has already asked GitHub whether a full release exists, without a
+    # window; this repeats the question over whatever list it was handed so the function
+    # is right on its own, and so a caller that skips that step cannot get a wrong number.
     if not releases or any(not r.get("isPrerelease") for r in releases):
         return ""
     newest = max(releases, key=lambda r: r.get("publishedAt") or "")
