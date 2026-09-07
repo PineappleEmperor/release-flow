@@ -13,9 +13,10 @@ contexts on a consumer's ruleset. The fifth is not for consumers at all: it is
 what the three CI repositories run on themselves. Four of the five also
 check out this repository a second time, into `.release-flow`, at the SHA the
 caller pinned; checking out with `path:` cleans only that directory, so it
-never disturbs the tree already checked out above it, and the scripts run
-against the Python floor this repository declares in `pyproject.toml`'s
-`target-version`, since the runner's own `python3` predates it.
+never disturbs the tree already checked out above it, and the scripts run under
+the Python version every `setup-python` step here names, since the runner's own
+`python3` predates it and `testbed_coverage.py` writes `except` without
+parentheses, which no earlier interpreter can parse.
 
 **`pr-checks.yml`** — every PR-time job that reads or writes labels, in one
 workflow so `needs:` can order them; a `labeled`/`unlabeled` trigger cannot
@@ -233,9 +234,9 @@ repository secret holding a PAT or app token with contents and pull-requests
 write. It is needed because a PR opened with the default `GITHUB_TOKEN` fires no
 `pull_request_target` event, so no checks would run and the required contexts
 would never report; the PR would be permanently unmergeable, which is how the
-previous auto-PR workflow failed. The other four
-workflows use the consumer's own `GITHUB_TOKEN`, which a called workflow receives
-automatically, and nothing is passed with `secrets: inherit`.
+previous auto-PR workflow failed. Every other workflow here uses the calling
+repository's own `GITHUB_TOKEN`, which a called workflow receives automatically,
+and nothing is passed with `secrets: inherit`.
 
 ## Check names
 
@@ -249,13 +250,15 @@ name>`. With the job ids of the callers above the required contexts are:
 | `lint` | `lint / CC title validation` |
 | `draft` | `draft / Auto draft PR` |
 | `release` | `release / Auto draft releases` |
+| `coverage` | `coverage / Every reusable workflow is called by the testbed` |
 
 Keep the first three required on the default branch; they report three different
 failures. `CC title validation` catches a title whose type is not in the
 allowlist, `CC labelling` catches the labelling machinery failing, and
 `CC label validation` catches a label that exists but is wrong, which is the case
 a `fix:`-titled PR carrying a `feat!:` commit produced: labelled `fix`, filed under
-Fixes, released as a patch. `draft` and `release` are not PR contexts.
+Fixes, released as a patch. `draft` and `release` are not PR contexts; `coverage`
+is one, and a CI repository should require it as well.
 
 ## Versions
 
@@ -265,8 +268,9 @@ Dependabot understands for GitHub Actions, so a release here arrives at every co
 as its existing weekly grouped Dependabot PR. Inside a called workflow `github.job_workflow_sha` is that
 pinned commit, and every script is checked out from it, so a consumer runs
 scripts and workflow from the same commit and can say which version it runs by
-reading the comment. In a local call (this repository's own `pr.yml`, `draft-pr.yml`
-and `release.yml`) the same expression resolves to this repository's own commit.
+reading the comment. In a local call (this repository's own `ci.yml`, `pr.yml`,
+`draft-pr.yml` and `release.yml`) the same expression resolves to this
+repository's own commit.
 
 ## Called versus copied
 
@@ -294,9 +298,11 @@ through the reusable workflows. `tests/` covers `commit_summary.py`,
 file of its own and is exercised only through `test_release_notes.py`, which loads
 it by path. `test_vocabulary.py` reads the commit-type lists out of `lint-pr.yml`,
 the drafter config, the stale-label step, the commit hook and `commit_summary.py`,
-and fails when any two disagree, since none of them can import another. Locally, where
-`python3` must itself meet the floor named under The five workflows, since the scripts
-use syntax an older interpreter cannot parse:
+and fails when any two disagree, since none of them can import another. `ci.yml`
+also calls `testbed-coverage.yml`, since this repository is judged by that check
+like any other; it is called from there rather than from a caller file of its own
+name, which would collide with the reusable workflow it calls. Locally, under the
+Python The five workflows names:
 
 ```
 python3 -m pip install -r requirements.test.txt
