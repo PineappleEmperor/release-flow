@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """Every reusable workflow this repository ships must be called by the testbed.
 
-Goal (6) of the delivery model says a release of a CI repository is proven on the testbed
-before it is tagged. Nothing enforced it, and `ha-panel-ci` was tagged `v1.0.0` while no
-repository anywhere called its one reusable workflow; the first call, weeks later, failed
-twice in two minutes. This is that goal, mechanised: a workflow with no caller has never
-run, and a release containing it is a claim rather than a result.
+Why that rule exists and what counts as a caller: README.md, under `testbed-coverage.yml`.
 
 Usage, from a checkout of the repository being judged:
     gh api "repos/<owner>/ha-ci-testing/contents/.github/workflows" --jq '.[].name' |
@@ -37,9 +33,8 @@ CALL = re.compile(
 COMMENT = re.compile(r"#.*")
 
 
-# A reusable workflow no integration is meant to call, so the testbed never will. It says
-# so in its own text rather than being special-cased here: an exception a reader cannot see
-# in the file is one nobody maintains. `testbed-coverage.yml` is the first of them.
+# The line a reusable workflow carries to declare that no consumer will ever call it, so
+# the testbed never will either. README.md says why it is declared there and not listed here.
 EXEMPT = "# testbed-coverage: not-for-consumers"
 
 
@@ -53,6 +48,10 @@ def reusable(workflows: pathlib.Path) -> list[str]:
         except OSError, yaml.YAMLError:
             continue
         if EXEMPT in text:
+            continue
+        # A `.yml` parsing to a scalar or a list is not a workflow. Skipping it is the
+        # same verdict as an unparseable one; crashing here would judge nothing at all.
+        if not isinstance(doc, dict):
             continue
         # PyYAML reads a bare `on:` key as the boolean True, so both spellings are checked.
         triggers = doc.get(True) if doc.get(True) is not None else doc.get("on")

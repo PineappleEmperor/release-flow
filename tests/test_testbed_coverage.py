@@ -32,11 +32,7 @@ def test_only_a_workflow_call_file_is_judged(tmp_path) -> None:
 
 
 def test_a_workflow_that_says_it_is_not_for_consumers_is_skipped(tmp_path) -> None:
-    """The coverage check is itself reusable, and no integration will ever call it.
-
-    Special-casing its filename here would be an exception a reader of the workflow could
-    not see, so the workflow declares itself instead.
-    """
+    """The coverage check is itself reusable, and no integration will ever call it."""
     d = _workflows(
         tmp_path,
         {
@@ -48,7 +44,7 @@ def test_a_workflow_that_says_it_is_not_for_consumers_is_skipped(tmp_path) -> No
 
 
 def test_an_uncalled_reusable_workflow_is_reported(tmp_path) -> None:
-    """The `ha-panel-ci` case: tagged v1.0.0 with nothing anywhere calling it."""
+    """The case the check exists for, and then the same workflow once a caller names it."""
     d = _workflows(tmp_path, {"panel-bundle.yml": _REUSABLE})
     assert tc.uncovered(d, "", "PineappleEmperor/ha-panel-ci") == ["panel-bundle.yml"]
 
@@ -88,6 +84,14 @@ def test_a_list_form_trigger_is_still_a_reusable_workflow(tmp_path) -> None:
         },
     )
     assert tc.reusable(d) == ["bare.yml", "list.yml"]
+
+
+def test_a_workflow_that_is_not_a_mapping_is_skipped(tmp_path) -> None:
+    """A file parsing to a scalar crashed the run, so nothing at all was judged."""
+    d = _workflows(
+        tmp_path, {"junk.yml": "just a string\n", "pr-checks.yml": _REUSABLE}
+    )
+    assert tc.reusable(d) == ["pr-checks.yml"]
 
 
 def test_a_caller_for_another_repository_does_not_count(tmp_path) -> None:
