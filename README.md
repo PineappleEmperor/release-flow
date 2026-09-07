@@ -301,8 +301,8 @@ the drafter config, the stale-label step, the commit hook and `commit_summary.py
 and fails when any two disagree, since none of them can import another. `ci.yml`
 also calls `testbed-coverage.yml`, since this repository is judged by that check
 like any other; it is called from there rather than from a caller file of its own
-name, which would collide with the reusable workflow it calls. Locally, under the
-Python The five workflows names:
+name, which would collide with the reusable workflow it calls. Locally, on the Python
+version named under The five workflows:
 
 ```
 python3 -m pip install -r requirements.test.txt
