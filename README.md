@@ -233,7 +233,7 @@ repository secret holding a PAT or app token with contents and pull-requests
 write. It is needed because a PR opened with the default `GITHUB_TOKEN` fires no
 `pull_request_target` event, so no checks would run and the required contexts
 would never report; the PR would be permanently unmergeable, which is how the
-previous auto-PR workflow failed. The other three
+previous auto-PR workflow failed. The other four
 workflows use the consumer's own `GITHUB_TOKEN`, which a called workflow receives
 automatically, and nothing is passed with `secrets: inherit`.
 
@@ -289,11 +289,14 @@ this one is public or the consumer's token can read it.
 `scripts/` and `tests/` under `pyproject.toml`, whose `[tool.ruff]` tables are the
 ones every consumer carries. Consumers never run it; they run the scripts
 through the reusable workflows. `tests/` covers `commit_summary.py`,
-`manifest_gate.py`, `release_notes.py` and `draft_version.py`; `check_release_notes.py` has no test
+`manifest_gate.py`, `release_notes.py`, `draft_version.py` and `testbed_coverage.py`;
+`check_release_notes.py` has no test
 file of its own and is exercised only through `test_release_notes.py`, which loads
 it by path. `test_vocabulary.py` reads the commit-type lists out of `lint-pr.yml`,
 the drafter config, the stale-label step, the commit hook and `commit_summary.py`,
-and fails when any two disagree, since none of them can import another. Locally:
+and fails when any two disagree, since none of them can import another. Locally, where
+`python3` must itself meet the floor named under The five workflows, since the scripts
+use syntax an older interpreter cannot parse:
 
 ```
 python3 -m pip install -r requirements.test.txt
