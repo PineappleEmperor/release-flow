@@ -3,3 +3,7 @@
 # adds a rule then arrives as a PR that either passes or says what to fix.
 ruff==0.16.2
 pytest==9.0.3
+# Not a test tool: testbed_coverage.py parses workflow YAML with it, and it is the
+# only third-party import anywhere in scripts/. It lives here because this file is
+# the one list every job installs from.
+pyyaml==6.0.3
