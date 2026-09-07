@@ -1,0 +1,58 @@
+name: Testbed Coverage
+
+# Documented in README.md. Judged by nothing: a CI repository calls this, never an
+# integration, so the testbed has no reason to.
+# testbed-coverage: not-for-consumers
+on:
+  workflow_call:
+    inputs:
+      testbed:
+        description: The repository whose callers count as proof, as owner/name.
+        type: string
+        default: PineappleEmperor/ha-ci-testing
+
+jobs:
+  coverage:
+    name: Every reusable workflow is called by the testbed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: PineappleEmperor/release-flow
+          ref: ${{ github.job_workflow_sha }}
+          path: .release-flow
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Install
+        run: python3 -m pip install --quiet pyyaml
+
+      - name: Read the testbed's callers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TESTBED: ${{ inputs.testbed }}
+        run: |
+          # Concatenated, not parsed here: the script owns what a caller looks like, and a
+          # file this cannot read must fail the job rather than shrink the evidence.
+          : > callers.txt
+          for f in $(gh api "repos/$TESTBED/contents/.github/workflows" --jq '.[].name'); do
+            gh api "repos/$TESTBED/contents/.github/workflows/$f" --jq .content \
+              | base64 -d >> callers.txt
+          done
+
+      - name: Judge
+        env:
+          REPO: ${{ github.repository }}
+          TESTBED: ${{ inputs.testbed }}
+        run: |
+          python3 .release-flow/scripts/testbed_coverage.py \
+            --repo "$REPO" --testbed "$TESTBED" < callers.txt
