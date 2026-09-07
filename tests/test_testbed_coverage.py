@@ -59,6 +59,39 @@ def test_an_uncalled_reusable_workflow_is_reported(tmp_path) -> None:
     assert tc.uncovered(d, caller, "PineappleEmperor/ha-panel-ci") == []
 
 
+def test_a_quoted_uses_value_still_counts(tmp_path) -> None:
+    """YAML lets a caller quote it, and a false "never called" is the worst verdict here."""
+    d = _workflows(tmp_path, {"pr-checks.yml": _REUSABLE})
+    for quote in ('"', "'"):
+        caller = (
+            f"jobs:\n  pr:\n    uses: {quote}o/r/.github/workflows/pr-checks.yml@abc{quote}\n"
+        )
+        assert tc.uncovered(d, caller, "o/r") == []
+
+
+def test_a_caller_inside_a_comment_does_not_count(tmp_path) -> None:
+    """A commented-out caller has never run, so counting it is the failure inverted."""
+    d = _workflows(tmp_path, {"pr-checks.yml": _REUSABLE})
+    caller = "jobs:\n  # uses: o/r/.github/workflows/pr-checks.yml@abc\n"
+    assert tc.uncovered(d, caller, "o/r") == ["pr-checks.yml"]
+
+    # The version comment that follows every real pin must survive the same stripping.
+    live = "jobs:\n  pr:\n    uses: o/r/.github/workflows/pr-checks.yml@abc # v1.0.0\n"
+    assert tc.uncovered(d, live, "o/r") == []
+
+
+def test_a_list_form_trigger_is_still_a_reusable_workflow(tmp_path) -> None:
+    """`on: [workflow_call]` is valid YAML and was silently dropped, so never judged."""
+    d = _workflows(
+        tmp_path,
+        {
+            "list.yml": "on: [workflow_call]\njobs:\n  a:\n    runs-on: ubuntu-latest\n",
+            "bare.yml": "on: workflow_call\njobs:\n  a:\n    runs-on: ubuntu-latest\n",
+        },
+    )
+    assert tc.reusable(d) == ["bare.yml", "list.yml"]
+
+
 def test_a_caller_for_another_repository_does_not_count(tmp_path) -> None:
     """Two CI repositories ship a `release.yml`; only the right owner's call covers it."""
     d = _workflows(tmp_path, {"release.yml": _REUSABLE})
