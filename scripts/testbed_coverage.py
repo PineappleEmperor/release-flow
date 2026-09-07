@@ -23,9 +23,18 @@ import sys
 import yaml
 
 # `uses: owner/repo/.github/workflows/name.yml@ref`, the only shape a caller may take.
+# YAML lets the value be quoted, and the quotes are optional here because a caller this
+# misses is reported as never called, which is the worst verdict the check can reach.
 CALL = re.compile(
-    r"uses:\s*(?P<repo>[\w.-]+/[\w.-]+)/\.github/workflows/(?P<file>[\w.-]+\.ya?ml)@"
+    r"uses:\s*[\"']?(?P<repo>[\w.-]+/[\w.-]+)/\.github/workflows/(?P<file>[\w.-]+\.ya?ml)@"
 )
+
+
+# A `#` and the rest of its line. Caller text is matched as text rather than parsed, so a
+# commented-out caller would otherwise count as a real one and invert the failure this
+# exists to catch. The version comment on a real pin sits past the `@`, where the match
+# has already ended, so stripping it changes nothing.
+COMMENT = re.compile(r"#.*")
 
 
 # A reusable workflow no integration is meant to call, so the testbed never will. It says
@@ -47,7 +56,11 @@ def reusable(workflows: pathlib.Path) -> list[str]:
             continue
         # PyYAML reads a bare `on:` key as the boolean True, so both spellings are checked.
         triggers = doc.get(True) if doc.get(True) is not None else doc.get("on")
-        if isinstance(triggers, dict) and "workflow_call" in triggers:
+        # `on:` takes a mapping, a list or a bare string. A form not recognised here is a
+        # workflow dropped from the list silently, and so never judged at all.
+        if isinstance(triggers, str):
+            triggers = [triggers]
+        if isinstance(triggers, dict | list) and "workflow_call" in triggers:
             found.append(wf.name)
     return found
 
@@ -56,7 +69,7 @@ def called(text: str, repo: str) -> set[str]:
     """The workflow files of `repo` that the concatenated caller text calls."""
     return {
         m.group("file")
-        for m in CALL.finditer(text)
+        for m in CALL.finditer(COMMENT.sub("", text))
         if m.group("repo").lower() == repo.lower()
     }
 

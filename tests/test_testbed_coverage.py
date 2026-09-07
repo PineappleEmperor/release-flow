@@ -63,9 +63,7 @@ def test_a_quoted_uses_value_still_counts(tmp_path) -> None:
     """YAML lets a caller quote it, and a false "never called" is the worst verdict here."""
     d = _workflows(tmp_path, {"pr-checks.yml": _REUSABLE})
     for quote in ('"', "'"):
-        caller = (
-            f"jobs:\n  pr:\n    uses: {quote}o/r/.github/workflows/pr-checks.yml@abc{quote}\n"
-        )
+        caller = f"jobs:\n  pr:\n    uses: {quote}o/r/.github/workflows/pr-checks.yml@abc{quote}\n"
         assert tc.uncovered(d, caller, "o/r") == []
 
 
