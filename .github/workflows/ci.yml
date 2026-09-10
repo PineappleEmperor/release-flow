@@ -32,3 +32,6 @@ jobs:
 
       - name: Pytest
         run: python3 -m pytest -q
+
+  coverage:
+    uses: ./.github/workflows/testbed-coverage.yml

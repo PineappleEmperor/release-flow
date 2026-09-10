@@ -1,19 +1,22 @@
 # release-flow
 
 One home for a Conventional Commits release pipeline, for any repository that uses
-Conventional Commits. The sections below say what the four reusable workflows do, how a
+Conventional Commits. The sections below say what the five reusable workflows do, how a
 consumer calls them, and how a release of this repository reaches consumers.
 
-## The four workflows
+## The five workflows
 
-All four are reusable (`on: workflow_call`) and live in `.github/workflows/`.
-Each job keeps the `name:` the source stack used, because those names are the
-required status-check contexts on a consumer's ruleset. Three of the four also
+All five are reusable (`on: workflow_call`) and live in `.github/workflows/`.
+Four of them are a consumer's PR and release plumbing, and their jobs keep the
+`name:` the source stack used, because those names are the required status-check
+contexts on a consumer's ruleset. The fifth is not for consumers at all: it is
+what the three CI repositories run on themselves. Four of the five also
 check out this repository a second time, into `.release-flow`, at the SHA the
 caller pinned; checking out with `path:` cleans only that directory, so it
-never disturbs the tree already checked out above it, and the scripts run
-against the Python floor this repository declares in `pyproject.toml`'s
-`target-version`, since the runner's own `python3` predates it.
+never disturbs the tree already checked out above it, and the scripts run under
+the Python version every `setup-python` step here names, since the runner's own
+`python3` predates it and `testbed_coverage.py` writes `except` without
+parentheses, which no earlier interpreter can parse.
 
 **`pr-checks.yml`** — every PR-time job that reads or writes labels, in one
 workflow so `needs:` can order them; a `labeled`/`unlabeled` trigger cannot
@@ -91,13 +94,26 @@ shipped and keep being updated by the next push. Writing the body with
 `gh release edit` fires `edited`, not `published`, so the job never retriggers
 itself.
 
+**`testbed-coverage.yml`** — *Every reusable workflow is called by the testbed*: for a
+CI repository, not for an integration. It reads the testbed's caller workflows over the
+API and fails when a workflow this repository ships with `on: workflow_call` is named by
+none of them. The rule is older than the check — a release of a CI repository is proven on
+the testbed before it is tagged — and `ha-panel-ci` was tagged `v1.0.0` with nothing
+anywhere calling its one workflow. Its first call, arranged weeks later, failed twice in
+two minutes. A workflow with no caller has never run, and a release containing it is a
+claim rather than a result. Reading no callers at all fails too, since an empty answer and
+full coverage are otherwise the same result. A reusable workflow no integration is meant
+to call — this one is the first — says so with a `# testbed-coverage: not-for-consumers`
+line of its own, rather than being named in an exception list a reader of the workflow
+would never see.
+
 ## Calling the workflows
 
 A consumer carries one caller workflow per reusable workflow in its own
 `.github/workflows/`, under the same filename. A caller is the trigger, the
 `permissions:` the reusable workflow needs (a called workflow can only downgrade what
 its caller grants), a short job id, and a `uses:` line pinned to a commit SHA with the
-matching tag in a comment. These four are the callers, complete:
+matching tag in a comment. These four are an integration's callers, complete:
 
 ```yaml
 # .github/workflows/pr-checks.yml
@@ -174,6 +190,25 @@ jobs:
     uses: PineappleEmperor/release-flow/.github/workflows/release-drafter.yml@{{sha}} # {{tag}}
 ```
 
+A CI repository adds a fifth, which an integration does not carry:
+
+```yaml
+# .github/workflows/testbed-coverage.yml
+name: Testbed Coverage
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    uses: PineappleEmperor/release-flow/.github/workflows/testbed-coverage.yml@{{sha}} # {{tag}}
+```
+
 `{{tag}}` is the newest full release of this repository and `{{sha}}` the commit it
 points at; nothing stored anywhere carries them, so nothing drifts:
 
@@ -200,9 +235,9 @@ repository secret holding a PAT or app token with contents and pull-requests
 write. It is needed because a PR opened with the default `GITHUB_TOKEN` fires no
 `pull_request_target` event, so no checks would run and the required contexts
 would never report; the PR would be permanently unmergeable, which is how the
-previous auto-PR workflow failed. The other three
-workflows use the consumer's own `GITHUB_TOKEN`, which a called workflow receives
-automatically, and nothing is passed with `secrets: inherit`.
+previous auto-PR workflow failed. Every other workflow here uses the calling
+repository's own `GITHUB_TOKEN`, which a called workflow receives automatically,
+and nothing is passed with `secrets: inherit`.
 
 ## Check names
 
@@ -216,13 +251,15 @@ name>`. With the job ids of the callers above the required contexts are:
 | `lint` | `lint / CC title validation` |
 | `draft` | `draft / Auto draft PR` |
 | `release` | `release / Auto draft releases` |
+| `coverage` | `coverage / Every reusable workflow is called by the testbed` |
 
 Keep the first three required on the default branch; they report three different
 failures. `CC title validation` catches a title whose type is not in the
 allowlist, `CC labelling` catches the labelling machinery failing, and
 `CC label validation` catches a label that exists but is wrong, which is the case
 a `fix:`-titled PR carrying a `feat!:` commit produced: labelled `fix`, filed under
-Fixes, released as a patch. `draft` and `release` are not PR contexts.
+Fixes, released as a patch. `draft` and `release` are not PR contexts; `coverage`
+is one, and a CI repository should require it as well.
 
 ## Versions
 
@@ -232,13 +269,14 @@ Dependabot understands for GitHub Actions, so a release here arrives at every co
 as its existing weekly grouped Dependabot PR. Inside a called workflow `github.job_workflow_sha` is that
 pinned commit, and every script is checked out from it, so a consumer runs
 scripts and workflow from the same commit and can say which version it runs by
-reading the comment. In a local call (this repository's own `pr.yml`, `draft-pr.yml`
-and `release.yml`) the same expression resolves to this repository's own commit.
+reading the comment. In a local call (this repository's own `ci.yml`, `pr.yml`,
+`draft-pr.yml` and `release.yml`) the same expression resolves to this
+repository's own commit.
 
 ## Called versus copied
 
-Called, never copied: the four reusable workflows and `scripts/`. Copied into the
-consumer, because nothing can call them: the four caller workflows above;
+Called, never copied: the five reusable workflows and `scripts/`. Copied into the
+consumer, because nothing can call them: the four caller workflows an integration carries;
 `.github/release-drafter.yml`, which the drafter action reads from the consumer's
 own default branch over the API and which carries the autolabeler rules and the
 label-to-semver mapping; and `.githooks/commit-msg`, enabled per clone with
@@ -256,11 +294,16 @@ this one is public or the consumer's token can read it.
 `scripts/` and `tests/` under `pyproject.toml`, whose `[tool.ruff]` tables are the
 ones every consumer carries. Consumers never run it; they run the scripts
 through the reusable workflows. `tests/` covers `commit_summary.py`,
-`manifest_gate.py`, `release_notes.py` and `draft_version.py`; `check_release_notes.py` has no test
+`manifest_gate.py`, `release_notes.py`, `draft_version.py` and `testbed_coverage.py`;
+`check_release_notes.py` has no test
 file of its own and is exercised only through `test_release_notes.py`, which loads
 it by path. `test_vocabulary.py` reads the commit-type lists out of `lint-pr.yml`,
 the drafter config, the stale-label step, the commit hook and `commit_summary.py`,
-and fails when any two disagree, since none of them can import another. Locally:
+and fails when any two disagree, since none of them can import another. `ci.yml`
+also calls `testbed-coverage.yml`, since this repository is judged by that check
+like any other; it is called from there rather than from a caller file of its own
+name, which would collide with the reusable workflow it calls. Locally, on the Python
+version named under The five workflows:
 
 ```
 python3 -m pip install -r requirements.test.txt
