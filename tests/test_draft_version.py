@@ -21,7 +21,7 @@ def test_a_prerelease_as_the_newest_release_pins_its_base() -> None:
     assert dv.pinned_version(releases) == "1.0.0"
 
 
-def test_a_final_as_the_newest_release_pins_nothing() -> None:
+def test_a_final_anywhere_in_the_history_pins_nothing() -> None:
     """Newest published release `v1.0.0`, with an older rc behind it."""
     releases = [
         {"tagName": "v1.0.0", "isPrerelease": False},
@@ -35,32 +35,37 @@ def test_no_published_release_pins_nothing() -> None:
     assert dv.pinned_version([]) == ""
 
 
-def test_an_rc_line_after_a_final_pins_the_rc_base() -> None:
-    """`v2.0.0rc3` newest, `v1.4.0` behind it."""
+def test_an_rc_line_after_a_final_pins_nothing() -> None:
+    """`v2.0.0rc3` newest, `v1.4.0` behind it.
+
+    The pin exists for a repository release-drafter cannot resolve at all. Once one full
+    release exists it resolves from that release and the labels since it, and an override
+    can only contradict them — it once would have shipped two breaking changes as
+    `v7.2.1` because an rc for `7.2.1` was open.
+    """
     releases = [
         {"tagName": "v2.0.0rc3", "isPrerelease": True},
         {"tagName": "v1.4.0", "isPrerelease": False},
     ]
-    assert dv.pinned_version(releases) == "2.0.0"
+    assert dv.pinned_version(releases) == ""
 
 
 def test_newest_means_most_recently_published_not_first_listed() -> None:
-    """The first-listed release is an rc; a final was published after it."""
+    """Among candidates only, the base comes from the one published last, not listed first.
+
+    An rc and its final draft are created in the same run, so creation order says nothing
+    about which came out first.
+    """
 
     def rel(tag: str, pre: bool, at: str) -> dict:
         return {"tagName": tag, "isPrerelease": pre, "publishedAt": at}
 
     releases = [
-        rel("v0.3.0rc1", True, "2026-09-06T08:05:00Z"),
-        rel("v0.3.0", False, "2026-09-06T08:40:00Z"),
-        rel("v0.2.1", False, "2026-09-04T19:26:38Z"),
+        rel("v0.4.0rc1", True, "2026-09-06T08:05:00Z"),
+        rel("v0.3.0rc2", True, "2026-09-06T08:40:00Z"),
+        rel("v0.3.0rc1", True, "2026-09-04T19:26:38Z"),
     ]
-    assert dv.pinned_version(releases) == ""
-    later_rc = [
-        rel("v0.3.0", False, "2026-09-06T08:40:00Z"),
-        rel("v0.4.0rc1", True, "2026-09-07T10:00:00Z"),
-    ]
-    assert dv.pinned_version(later_rc) == "0.4.0"
+    assert dv.pinned_version(releases) == "0.3.0"
 
 
 def test_base_of_a_version() -> None:

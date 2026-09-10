@@ -60,13 +60,14 @@ each carries a semver-increment and the highest one since the last release
 wins — and maintains a draft; nothing in this repository carries a
 hand-written version, and a consumer that needs the number in a file writes it
 there when the release publishes. release-drafter counts only full releases as
-"the last release", so a repository whose most recently published release (by publish
-time, since an rc and its final are created together) is a prerelease
-would resolve from nothing and draft `v0.0.1`; `draft_version.py` therefore holds
-the draft to that line's base version while it is open (`v1.0.0rc1` keeps the draft
-at `v1.0.0`), and the labels take over again once a full release exists. Publishing a
-prerelease thereby fixes the number its final will carry; a larger change starts a
-new line. It checks out the consumer's full history,
+"the last release", so a repository whose entire published history is candidates has
+nothing to resolve from and drafts `v0.0.1`; `draft_version.py` supplies the number for
+that case alone, the base of the candidate published last (`v1.0.0rc1` gives `v1.0.0`),
+since an rc and its final draft are created in the same run and creation order says
+nothing. The moment one full release exists the pin stops: the labels on the PRs merged
+since it are the answer, and an override could only contradict them — with `v7.2.0`
+released and `v7.2.1rc1` open, a pin would have drafted `v7.2.1` for a pull request
+carrying two breaking changes. It checks out the consumer's full history,
 since `release_notes.py` walks a `tag..HEAD` range a shallow clone can't
 resolve, then that script writes a body grouped by commit type over the
 drafter's PR-per-line body — release-drafter categorises by PR label, so a fix
