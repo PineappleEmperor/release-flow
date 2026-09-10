@@ -1,5 +1,5 @@
 # What .github/workflows/ci.yml installs before linting and testing scripts/.
 # Pinned so Dependabot's pip group has something to move; a ruff release that
 # adds a rule then arrives as a PR that either passes or says what to fix.
-ruff==0.16.2
-pytest==9.0.3
+ruff==0.16.5
+pytest==9.1.1
