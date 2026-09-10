@@ -40,13 +40,17 @@ def placeholder_from(config: pathlib.Path) -> str | None:
 
 
 def check(
-    notes: str, version: str | None = None, placeholder: str | None = None
+    notes: str,
+    version: str | None = None,
+    placeholder: str | None = None,
+    *,
+    first_release: bool = False,
 ) -> list[str]:
     """Return a list of problems; empty means the notes are well formed."""
     problems: list[str] = []
 
     # A major with nothing under Breaking Changes.
-    if version:
+    if version and not first_release:
         major = version.lstrip("v").split(".")[0]
         minor_patch = version.lstrip("v").split(".")[1:]
         if (
@@ -108,6 +112,11 @@ def main() -> int:
         default=str(DRAFTER_CONFIG),
         help="drafter config whose `template` is the draft placeholder",
     )
+    ap.add_argument(
+        "--first-release",
+        action="store_true",
+        help="no full release precedes this one; skip the major/breaking check",
+    )
     args = ap.parse_args()
 
     if args.tag:
@@ -125,7 +134,10 @@ def main() -> int:
             notes = fh.read()
 
     problems = check(
-        notes, args.tag or args.version, placeholder_from(pathlib.Path(args.config))
+        notes,
+        args.tag or args.version,
+        placeholder_from(pathlib.Path(args.config)),
+        first_release=args.first_release,
     )
     if not problems:
         print("release notes render correctly")

@@ -29,9 +29,31 @@ jobs:
         with:
           python-version: '3.14'
 
+      - id: pin
+        name: Supply a version where nothing else can resolve one
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # One full release is all it takes for release-drafter to resolve on its own, so
+          # ask for exactly that and stop. `--limit 1` over a filtered list answers it with
+          # no window: counting through an unfiltered list would need a bound, and any
+          # bound is a repository with more candidates than that waiting to be wrong.
+          FULL=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 \
+            --json tagName --jq '.[0].tagName // ""')
+          if [ -n "$FULL" ]; then
+            V=""
+          else
+            V=$(gh release list --exclude-drafts --limit 100 --json tagName,isPrerelease,publishedAt \
+              | python3 .release-flow/scripts/draft_version.py)
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
       - uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
         id: drafter
         if: github.event_name == 'push'
+        with:
+          version: ${{ steps.pin.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -52,7 +74,8 @@ jobs:
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
-      - name: Generate notes grouped by commit type
+      - id: notes
+        name: Generate notes grouped by commit type
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -68,7 +91,8 @@ jobs:
             RANGE="$(git rev-list --max-parents=0 HEAD | tail -1)..HEAD"
             PREV_ARG=()
           fi
-          BASE_V=$(printf '%s' "$V" | sed -E 's/(rc|alpha|beta|a|b)[0-9]*$//I')
+          echo "previous=$PREV" >> "$GITHUB_OUTPUT"
+          BASE_V=$(python3 .release-flow/scripts/draft_version.py --base "$V")
           gh release view "v$BASE_V" >/dev/null 2>&1 \
             || gh release create "v$BASE_V" --draft --title "v$BASE_V" --notes "pending"
           RC_TAG=$(gh release list --limit 50 --json tagName,isDraft \
@@ -105,5 +129,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           V: ${{ steps.ver.outputs.version }}
+          PREV: ${{ steps.notes.outputs.previous }}
         run: |
-          python3 .release-flow/scripts/check_release_notes.py --tag "v$V" --version "$V"
+          FIRST=()
+          [ -n "$PREV" ] || FIRST=(--first-release)
+          python3 .release-flow/scripts/check_release_notes.py --tag "v$V" --version "$V" "${FIRST[@]}"

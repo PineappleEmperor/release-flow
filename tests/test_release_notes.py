@@ -125,6 +125,27 @@ def test_a_missing_config_leaves_only_the_empty_body_check(tmp_path) -> None:
     assert not any("draft placeholder" in p for p in crn.check("pending"))
 
 
+def test_a_major_with_no_breaking_section_is_flagged() -> None:
+    """`v2.0.0` after an earlier release, notes with only Features."""
+    crn = _crn()
+    notes = "## 🚀 Features\n\n- add a thing\n"
+    assert any("Breaking Changes" in p for p in crn.check(notes, "2.0.0"))
+    assert not any(
+        "Breaking Changes" in p
+        for p in crn.check("## 🚨 Breaking Changes\n\n- drop it\n", "2.0.0")
+    )
+
+
+def test_a_first_release_is_not_held_to_the_major_rule() -> None:
+    """`v1.0.0` with no previous release: nothing to have broken from."""
+    crn = _crn()
+    notes = "## 🚀 Features\n\n- add a thing\n"
+    assert not any(
+        "Breaking Changes" in p for p in crn.check(notes, "1.0.0", first_release=True)
+    )
+    assert any("Breaking Changes" in p for p in crn.check(notes, "1.0.0"))
+
+
 def test_drafter_body_means_the_generator_never_ran() -> None:
     """A body still in release-drafter's PR-per-line shape."""
     crn = _crn()
