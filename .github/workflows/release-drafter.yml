@@ -30,13 +30,23 @@ jobs:
           python-version: '3.14'
 
       - id: pin
-        name: Hold the draft to an open prerelease line
+        name: Supply a version where nothing else can resolve one
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
-          V=$(gh release list --exclude-drafts --limit 20 --json tagName,isPrerelease,publishedAt \
-            | python3 .release-flow/scripts/draft_version.py)
+          # One full release is all it takes for release-drafter to resolve on its own, so
+          # ask for exactly that and stop. `--limit 1` over a filtered list answers it with
+          # no window: counting through an unfiltered list would need a bound, and any
+          # bound is a repository with more candidates than that waiting to be wrong.
+          FULL=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 \
+            --json tagName --jq '.[0].tagName // ""')
+          if [ -n "$FULL" ]; then
+            V=""
+          else
+            V=$(gh release list --exclude-drafts --limit 100 --json tagName,isPrerelease,publishedAt \
+              | python3 .release-flow/scripts/draft_version.py)
+          fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
 
       - uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0
