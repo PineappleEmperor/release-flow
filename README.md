@@ -235,8 +235,9 @@ the PR unmergeable.
 
 `auto-draft-pr.yml` declares `secrets: release-token: {required: true}` and its
 caller passes `secrets: release-token: ${{ secrets.RELEASE_TOKEN }}`, a
-repository secret holding a PAT or app token with contents and pull-requests
-write. It is needed because a PR opened with the default `GITHUB_TOKEN` fires no
+repository secret holding a PAT with contents and pull-requests write. Nothing here
+mints a token, so a GitHub App cannot stand in for it: an installation token pasted as
+the secret works only until it expires, an hour later. It is needed because a PR opened with the default `GITHUB_TOKEN` fires no
 `pull_request_target` event, so no checks would run and the required contexts
 would never report; the PR would be permanently unmergeable, which is how the
 previous auto-PR workflow failed. Every other workflow here uses the calling
