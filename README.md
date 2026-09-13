@@ -38,11 +38,15 @@ comment and writes the implied next version to the step summary via
 trigger must be `pull_request_target`, since a fork PR gets a read-only token under
 `pull_request` and could not be labelled or commented on; running in the base repo's
 context with a writable token means nothing here may execute PR-authored code, which
-is why neither job checks out the PR head.
+is why neither job checks out the PR head. Under that trigger GitHub also loads the
+caller from the base branch, so a PR that changes the caller is checked by the base's
+copy of it and can never prove its own fix green.
 
 **`lint-pr.yml`** — *CC title validation*: `action-semantic-pull-request` with the
 ten types the autolabeler maps, and only those. `revert:` is deliberately absent
-because it maps to no label and would leave a PR with no release category.
+because it maps to no label and would leave a PR with no release category. A commit
+may still be `revert:`: the draft opener retypes a commit of any other type as `chore:`
+in the title it builds (`feature` alone becomes `feat`), so the title stays labellable.
 
 **`auto-draft-pr.yml`** — *Auto draft PR*: on a push to any non-default branch by
 the repository owner, opens a draft PR titled from the branch's commits
@@ -217,8 +221,8 @@ TAG=$(gh api repos/PineappleEmperor/release-flow/releases/latest --jq .tag_name)
 SHA=$(gh api "repos/PineappleEmperor/release-flow/commits/$TAG" --jq .sha)
 ```
 
-From then on Dependabot moves the SHA and the comment together. A `{{` left in a
-consumer's workflow is an audit failure. The `pr-checks` caller also carries the
+From then on the pin moves as *The version model* in ha-integration-ci's README says.
+The `pr-checks` caller also carries the
 `concurrency` group and the event `types` list, because both are keyed on the
 triggering event and belong with the trigger. `labeled`/`unlabeled` are deliberately
 excluded from those `types`: as `pr-checks.yml` above notes, those events never fire
@@ -263,15 +267,13 @@ is one, and a CI repository should require it as well.
 
 ## Versions
 
-A tag on this repository is a version of the pipeline, drafted by the same
-`release-drafter.yml` it ships. Consumers pin as Calling the workflows shows, the shape
-Dependabot understands for GitHub Actions, so a release here arrives at every consumer
-as its existing weekly grouped Dependabot PR. Inside a called workflow `github.job_workflow_sha` is that
-pinned commit, and every script is checked out from it, so a consumer runs
-scripts and workflow from the same commit and can say which version it runs by
-reading the comment. In a local call (this repository's own `ci.yml`, `pr.yml`,
-`draft-pr.yml` and `release.yml`) the same expression resolves to this
-repository's own commit.
+This repository is released by the same `release-drafter.yml` it ships. How a consumer
+pins a release, how Dependabot moves the pin and
+why the scripts ride it is *The version model* in
+[PineappleEmperor/ha-integration-ci](https://github.com/PineappleEmperor/ha-integration-ci)'s
+README, which this repository follows. What is this repository's own: in a local call
+(its `ci.yml`, `pr.yml`, `draft-pr.yml` and `release.yml`) `github.job_workflow_sha`
+resolves to this repository's own commit.
 
 ## Called versus copied
 
@@ -282,8 +284,10 @@ own default branch over the API and which carries the autolabeler rules and the
 label-to-semver mapping; and `.githooks/commit-msg`, enabled per clone with
 `git config core.hooksPath .githooks`, which rejects subjects that are not
 Conventional Commits, subjects that join two changes with `and`, editorialising
-words, AI-attribution trailers, and `BREAKING CHANGE:` footers (`!` on the type is
-the only breaking marker). The consumer's Dependabot configuration needs a `github-actions`
+words, AI-attribution trailers, and `BREAKING CHANGE:` footers — `!` on the type is
+the only breaking marker, because the autolabeler reads the title and the gate and the
+notes read commit subjects, none of them a footer, so a footer declares a break that
+nothing acts on. The consumer's Dependabot configuration needs a `github-actions`
 ecosystem entry for the pin to move; `.github/dependabot.yml` here is the shape
 to copy. The reusable workflows are callable from another repository only while
 this one is public or the consumer's token can read it.
