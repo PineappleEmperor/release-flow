@@ -5,7 +5,7 @@ on:
   workflow_call:
     secrets:
       release-token:
-        description: A PAT or app token with contents+pull-requests write; opens the draft PR
+        description: A PAT with contents+pull-requests write; opens the draft PR
         required: true
 
 jobs:
