@@ -24,7 +24,8 @@ _SPEC.loader.exec_module(cs)
     ("subject", "group", "desc"),
     [
         ("feat: add reconfigure flow", "feat", "add reconfigure flow"),
-        ("feature: add thing", "feat", "add thing"),
+        # `feature` is a label, not a commit type; the hook and lint-pr reject it.
+        ("feature: add thing", "other", "add thing"),
         ("fix: close the session", "fix", "close the session"),
         ("chore: tidy", "maint", "tidy"),
         ("docs: explain", "maint", "explain"),
@@ -153,6 +154,7 @@ def test_a_type_outside_the_allowlist_is_retyped_chore() -> None:
     assert (
         cs.title_for(["revert: undo the flow change"]) == "chore: undo the flow change"
     )
+    assert cs.title_for(["feature: add thing"]) == "chore: add thing"
 
 
 def test_the_allowlist_is_the_ten_types() -> None:

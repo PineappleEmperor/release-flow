@@ -27,7 +27,7 @@ jobs:
           if   printf '%s' "$TITLE" | grep -qiE '^[a-z]+(\([^)]*\))?!:';        then WIN=xfeat
           elif printf '%s' "$TITLE" | grep -qiE '^(chore|docs|refactor|perf|test|build|ci|style)(\([^)]*\))?:'; then WIN=chore
           elif printf '%s' "$TITLE" | grep -qiE '^fix(\([^)]*\))?:';            then WIN=fix
-          elif printf '%s' "$TITLE" | grep -qiE '^(feat|feature)(\([^)]*\))?:'; then WIN=feature
+          elif printf '%s' "$TITLE" | grep -qiE '^feat(\([^)]*\))?:';           then WIN=feature
           else exit 0
           fi
           CURRENT=$(gh pr view "$PR" --json labels --jq '.labels[].name')

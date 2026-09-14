@@ -46,7 +46,7 @@ copy of it and can never prove its own fix green.
 ten types the autolabeler maps, and only those. `revert:` is deliberately absent
 because it maps to no label and would leave a PR with no release category. A commit
 may still be `revert:`: the draft opener retypes a commit of any other type as `chore:`
-in the title it builds (`feature` alone becomes `feat`), so the title stays labellable.
+in the title it builds, so the title stays labellable.
 
 **`auto-draft-pr.yml`** — *Auto draft PR*: on a push to any non-default branch by
 the repository owner, opens a draft PR titled from the branch's commits

@@ -41,6 +41,30 @@ def stale_step_chore_types() -> set[str]:
     return _alternation(text, "Remove superseded type labels")
 
 
+_TYPES = re.compile(r"\^\(?([a-z|]+)")
+
+
+def _types_after(text: str, after: str) -> set[str]:
+    """The types the first `^type` or `^(a|b)` regex after `after` in `text` accepts."""
+    m = _TYPES.search(text, text.index(after))
+    assert m, f"no ^type regex after {after!r}"
+    return set(m.group(1).split("|"))
+
+
+def test_the_autolabeler_labels_each_type_once() -> None:
+    """The `fix` and `feature` rules accept only the type of that name, no alias."""
+    text = (_ROOT / ".github/release-drafter.yml").read_text()
+    assert _types_after(text, 'label: "fix"') == {"fix"}
+    assert _types_after(text, 'label: "feature"') == {"feat"}
+
+
+def test_the_stale_label_step_labels_each_type_once() -> None:
+    """The step's fix and feat branches, which follow the chore and fix branches."""
+    text = (_ROOT / ".github/workflows/pr-checks.yml").read_text()
+    assert _types_after(text, "WIN=chore") == {"fix"}
+    assert _types_after(text, "WIN=fix") == {"feat"}
+
+
 def hook_types() -> set[str]:
     """The subject types the commit hook accepts."""
     text = (_ROOT / ".githooks/commit-msg").read_text()
