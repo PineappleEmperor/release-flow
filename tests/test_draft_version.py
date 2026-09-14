@@ -91,6 +91,118 @@ def test_main_base_mode(capsys) -> None:
     assert capsys.readouterr().out.strip() == "7.0.0"
 
 
+def _draft(tag: str) -> dict:
+    return {"tagName": tag, "isDraft": True}
+
+
+def test_a_push_removes_the_candidate_of_a_base_the_draft_moved_past() -> None:
+    """The testbed on 2026-09-10: `v0.3.1` renamed to `v0.4.0`, `v0.3.1rc1` left behind."""
+    releases = [
+        _draft("v0.4.0"),
+        _draft("v0.4.0rc1"),
+        _draft("v0.3.1rc1"),
+        {"tagName": "v0.3.0", "isDraft": False},
+    ]
+    assert dv.stale_drafts(releases, drafting="0.4.0") == ["v0.3.1rc1"]
+
+
+def test_a_push_keeps_the_drafts_of_its_own_base_and_every_published_release() -> None:
+    """A published candidate of an older base is history, never a draft to remove."""
+    releases = [
+        _draft("v1.1.0"),
+        _draft("v1.1.0rc1"),
+        {"tagName": "v1.0.2rc1", "isDraft": False},
+    ]
+    assert dv.stale_drafts(releases, drafting="1.1.0") == []
+
+
+def test_a_push_keeps_the_drafts_of_a_higher_base() -> None:
+    """Only a base the draft has moved past is orphaned; one above it is not."""
+    releases = [_draft("v0.4.0"), _draft("v0.4.0rc2"), _draft("v0.3.0rc3")]
+    assert dv.stale_drafts(releases, drafting="0.3.0") == []
+
+
+def test_a_push_on_a_pinned_version_removes_nothing() -> None:
+    """With no full release, the pin follows whichever candidate was published last.
+
+    Publishing `v0.3.0rc2` and then `v0.4.0rc1` pins `0.4.0`, and the other order pins
+    `0.3.0`, so which line's drafts survived would depend on that order. A pinned push
+    leaves every draft for the first final's publish to clear.
+    """
+    releases = [_draft("v0.3.0"), _draft("v0.3.0rc3"), _draft("v0.4.0rc2")]
+    assert dv.stale_drafts(releases, drafting="0.4.0", pinned=True) == []
+
+
+def test_publishing_a_final_removes_every_draft_at_or_below_its_base() -> None:
+    """release-flow on 2026-09-10: `v1.1.0` published with `v1.0.2rc1` still a draft."""
+    releases = [_draft("v1.0.2rc1"), _draft("v1.1.0rc1"), _draft("v1.2.0rc1")]
+    assert dv.stale_drafts(releases, published="v1.1.0") == ["v1.0.2rc1", "v1.1.0rc1"]
+
+
+def test_publishing_matches_the_version_not_a_prefix_of_its_tag() -> None:
+    """A tag prefix matches `v1.1.10rc1` when publishing `v1.1.1`; a version does not."""
+    releases = [_draft("v1.1.10rc1"), _draft("v1.1.1rc1")]
+    assert dv.stale_drafts(releases, published="v1.1.1") == ["v1.1.1rc1"]
+
+
+def test_publishing_anything_but_an_exact_base_removes_nothing() -> None:
+    """Final is `X.Y.Z` after one leading `v`, as the workflow tests `V` against its base."""
+    releases = [_draft("v1.1.0"), _draft("v1.1.0rc3"), _draft("v1.0.2rc1")]
+    for tag in (
+        "v1.1.0rc2",
+        "v1.1.0b1",
+        "v1.1.0beta1",
+        "v1.1.0dev1",
+        "v1.1.0.post1",
+        "v1.1.0-rc.1",
+        "vv1.1.0",
+    ):
+        assert dv.stale_drafts(releases, published=tag) == [], tag
+
+
+def test_one_leading_v_is_optional_in_a_published_final() -> None:
+    """The workflow strips one `v` from the tag, so `1.1.0` is as final as `v1.1.0`."""
+    releases = [_draft("v1.1.0rc3"), _draft("v1.2.0rc1")]
+    assert dv.stale_drafts(releases, published="1.1.0") == ["v1.1.0rc3"]
+
+
+def test_only_the_two_tag_shapes_the_workflow_makes_are_ever_removed() -> None:
+    """`vX.Y.Z` and `vX.Y.ZrcN`; a draft of any other shape was made by someone else."""
+    releases = [
+        _draft("nightly"),
+        _draft("v0.1.0-scratch"),
+        _draft("1.0.0.dev-branch"),
+        _draft("v0.2.0b1"),
+        _draft("v0.2.0"),
+        _draft("v0.2.0rc4"),
+    ]
+    assert dv.stale_drafts(releases, drafting="2.0.0") == ["v0.2.0", "v0.2.0rc4"]
+
+
+def test_exactly_one_of_drafting_or_published_is_required() -> None:
+    """Neither, or both, is a caller bug and must not pick a rule silently."""
+    for kwargs in ({}, {"drafting": "1.0.0", "published": "v1.0.0"}):
+        try:
+            dv.stale_drafts([], **kwargs)
+        except ValueError:
+            continue
+        raise AssertionError(f"accepted {kwargs}")
+
+
+def test_main_stale_drafts_mode(capsys, monkeypatch) -> None:
+    """`--stale-drafts` with `--drafting` or `--published` prints one tag per line."""
+    listing = json.dumps([_draft("v0.3.1rc1"), _draft("v0.4.0rc1")])
+    monkeypatch.setattr("sys.stdin", _Stdin(listing))
+    assert dv.main(["--stale-drafts", "--drafting", "0.4.0"]) == 0
+    assert capsys.readouterr().out.split() == ["v0.3.1rc1"]
+    monkeypatch.setattr("sys.stdin", _Stdin(listing))
+    assert dv.main(["--stale-drafts", "--published", "v0.4.0"]) == 0
+    assert capsys.readouterr().out.split() == ["v0.3.1rc1", "v0.4.0rc1"]
+    monkeypatch.setattr("sys.stdin", _Stdin(listing))
+    assert dv.main(["--stale-drafts", "--drafting", "0.4.0", "--pinned"]) == 0
+    assert capsys.readouterr().out.split() == []
+
+
 class _Stdin:
     """A stand-in for sys.stdin holding one string."""
 
