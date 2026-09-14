@@ -92,9 +92,27 @@ fails the job if the body a reader would see is a placeholder, the
 empty-range sentinel, the drafter's own output, a major with no Breaking
 Changes section, or a bullet that repeats its own heading. `release: published` fires last for both the
 draft-published and the tag-pushed paths, so on that event the workflow writes
-the final body once, last, and deletes the superseded drafts — left behind, an
-rc draft would reappear in the release list for a version that already
-shipped and keep being updated by the next push. Writing the body with
+the final body once, last. A release is final when its tag, less one leading `v`,
+is exactly `X.Y.Z`, the workflow's own test of the version against its base;
+anything else, `rc1`, `b1` or `.post1` alike, is a candidate. Publishing a final deletes every
+draft at or below its version and creates no candidate draft of its own, which
+would only be deleted again — left behind, an rc draft would reappear in the
+release list for a version that already shipped and keep being updated by the next
+push. Publishing a candidate deletes nothing, since its line stays open. A push
+deletes every draft below the base it is drafting: the candidate lookup asks only
+for the current base, so when the labels move the full draft up the old base's
+candidate would otherwise be found by nothing again, and `v1.0.2rc1` outlived
+three releases here. Drafts above the base are kept, since the draft has not moved
+past them. A push whose version came from the pin deletes nothing: the pin follows
+whichever candidate was published last, so which line's drafts survived would
+depend on that order, and the first final's publish clears them instead. The pin
+follows GitHub's prerelease flag as release-drafter does, so a final tag published
+with that flag set leaves pushes pinned until a release without it exists.
+`draft_version.py --stale-drafts` makes each decision over the newest 1000
+releases. It names only drafts of the two shapes the workflow makes, `vX.Y.Z` and
+`vX.Y.ZrcN`, and compares them as versions rather than tag prefixes, since a prefix
+matches `v1.1.10rc1` when publishing `v1.1.1`. A failure listing releases fails
+the job rather than deleting nothing quietly. Writing the body with
 `gh release edit` fires `edited`, not `published`, so the job never retriggers
 itself.
 
