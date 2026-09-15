@@ -85,7 +85,7 @@ def classify(subject: str) -> tuple[str, str]:
     if m.group("bang"):
         return "breaking", desc
     t = m.group("type").lower()
-    if t in ("feat", "feature"):
+    if t == "feat":
         return "feat", desc
     if t == "fix":
         return "fix", desc
@@ -145,7 +145,6 @@ def title_for(subjects: list[str]) -> str:
         if not m or BUMP.match(subject.strip()) or classify(subject.strip())[0] != win:
             continue
         kind = m.group("type").lower()
-        kind = "feat" if kind == "feature" else kind
         if kind not in LABELLABLE:
             kind = "chore"
         if m.group("bang"):

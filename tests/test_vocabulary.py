@@ -4,6 +4,8 @@ import importlib.util
 import pathlib
 import re
 
+import yaml
+
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location(
     "commit_summary", _ROOT / "scripts/commit_summary.py"
@@ -39,6 +41,66 @@ def stale_step_chore_types() -> set[str]:
     """The title types the superseded-label step in pr-checks.yml maps to `chore`."""
     text = (_ROOT / ".github/workflows/pr-checks.yml").read_text()
     return _alternation(text, "Remove superseded type labels")
+
+
+_DRAFTER_RULE = re.compile(r"/(?P<pattern>.*)/(?P<flags>[a-z]*)")
+_STEP_BRANCH = re.compile(
+    r"grep (?P<flags>(?:-[A-Za-z]+\s+)+)'(?P<pattern>[^']+)';\s*then WIN=(?P<label>\w+)"
+)
+
+
+def _compiled(pattern: str, flags: str) -> re.Pattern[str]:
+    """The regex as the file's own engine would run it."""
+    return re.compile(pattern, re.IGNORECASE if "i" in flags else 0)
+
+
+def autolabeler_rules() -> dict[str, list[re.Pattern[str]]]:
+    """Each autolabeler label -> the title regexes that apply it, compiled as written."""
+    config = yaml.safe_load((_ROOT / ".github/release-drafter.yml").read_text())
+    rules: dict[str, list[re.Pattern[str]]] = {}
+    for rule in config["autolabeler"]:
+        patterns = []
+        for title in rule["title"]:
+            m = _DRAFTER_RULE.fullmatch(title)
+            assert m, f"not a /regex/flags title rule: {title!r}"
+            patterns.append(_compiled(m["pattern"], m["flags"]))
+        rules[rule["label"]] = patterns
+    assert rules, "no autolabeler rules parsed"
+    return rules
+
+
+def stale_step_branches() -> list[tuple[str, re.Pattern[str]]]:
+    """Each branch of the superseded-label step as (label, title regex), in order."""
+    text = (_ROOT / ".github/workflows/pr-checks.yml").read_text()
+    step = text[text.index("Remove superseded type labels") : text.index("CURRENT=")]
+    found = [
+        (m["label"], _compiled(m["pattern"], m["flags"]))
+        for m in _STEP_BRANCH.finditer(step)
+    ]
+    assert len(found) == step.count("then WIN="), "a branch was not parsed"
+    assert found, "no title branches parsed"
+    return found
+
+
+def test_the_autolabeler_labels_feat_titles_only_as_feat() -> None:
+    """`feature:` is a label, not a title type: no rule applies any label to it."""
+    rules = autolabeler_rules()
+    assert any(r.match("feat: add thing") for r in rules["feature"])
+    assert any(r.match("FEAT(scope): add thing") for r in rules["feature"])
+    for label, patterns in rules.items():
+        for pattern in patterns:
+            assert not pattern.match("feature: add thing"), (label, pattern.pattern)
+
+
+def test_the_stale_label_step_reads_feat_titles_only_as_feat() -> None:
+    """The step's branches agree with the autolabeler about a `feature:` title."""
+    branches = stale_step_branches()
+    assert any(
+        label == "feature" and pattern.match("feat: add thing")
+        for label, pattern in branches
+    )
+    for label, pattern in branches:
+        assert not pattern.match("feature: add thing"), (label, pattern.pattern)
 
 
 def hook_types() -> set[str]:
