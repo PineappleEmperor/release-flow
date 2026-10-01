@@ -291,7 +291,7 @@ pins a release, how Dependabot moves the pin and
 why the scripts ride it is *The version model* in
 [PineappleEmperor/ha-integration-ci](https://github.com/PineappleEmperor/ha-integration-ci)'s
 README, which this repository follows. What is this repository's own: in a local call
-(its `ci.yml`, `pr.yml`, `draft-pr.yml` and `release.yml`) `github.job_workflow_sha`
+(its `ci.yml`, `pr.yml`, `draft-pr.yml` and `release.yml`) `job.workflow_sha`
 resolves to this repository's own commit.
 
 ## Called versus copied
