@@ -5,7 +5,7 @@ on:
   workflow_call:
     secrets:
       release-token:
-        description: A PAT with contents+pull-requests write; opens the draft PR
+        description: A PAT with contents+pull-requests write; opens the draft PR, retitles the owner's open one
         required: true
 
 jobs:
@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    concurrency:
+      group: auto-draft-pr-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -32,20 +35,16 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Open a draft PR if none exists
+      - name: Open a draft PR, or retitle the open one from its commits
         env:
           GH_TOKEN: ${{ secrets.release-token }}
           GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
           BRANCH: ${{ github.ref_name }}
           BASE: ${{ github.event.repository.default_branch }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::release-token is empty (the caller passes a secret that is not set); no draft PR was opened"
-            exit 0
-          fi
-          EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
-          if [ -n "$EXISTING" ]; then
-            echo "::notice::PR #$EXISTING already open for $BRANCH"
+            echo "::warning::release-token is empty (the caller passes a secret that is not set); no draft PR was opened or retitled"
             exit 0
           fi
           git log --format=%s "origin/$BASE..HEAD" > subjects.txt
@@ -54,5 +53,22 @@ jobs:
             exit 0
           fi
           TITLE=$(python3 .release-flow/scripts/commit_summary.py --mode title --subjects subjects.txt)
-          gh pr create --draft --base "$BASE" --head "$BRANCH" \
-            --title "$TITLE" --body ""
+          # --head matches a fork's branch of the same name too, so keep this repository's own.
+          OPEN=$(gh pr list --head "$BRANCH" --base "$BASE" --state open \
+            --json number,author,title,isCrossRepository \
+            --jq '[.[] | select(.isCrossRepository | not)][0] | select(.) | "\(.number) \(.author.login) \(.title)"')
+          NUMBER=${OPEN%% *}
+          REST=${OPEN#* }
+          AUTHOR=${REST%% *}
+          CURRENT=${REST#* }
+          if [ -z "$OPEN" ]; then
+            gh pr create --draft --base "$BASE" --head "$BRANCH" \
+              --title "$TITLE" --body ""
+          elif [ "$AUTHOR" != "$OWNER" ]; then
+            echo "::notice::PR #$NUMBER was opened by $AUTHOR, so its title is theirs"
+          elif [ "$CURRENT" = "$TITLE" ]; then
+            echo "::notice::PR #$NUMBER is already titled from its commits"
+          else
+            gh api -X PATCH "repos/$GH_REPO/pulls/$NUMBER" -f title="$TITLE" --silent
+            echo "::notice::PR #$NUMBER retitled from its commits: $TITLE"
+          fi
