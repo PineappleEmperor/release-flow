@@ -51,12 +51,19 @@ in the title it builds, so the title stays labellable.
 **`auto-draft-pr.yml`** — *Auto draft PR*: on a push to any non-default branch by
 the repository owner, opens a draft PR titled from the branch's commits
 (`commit_summary.py --mode title`), trusting the title because the commit-msg
-hook already validated those commits. Gated to the owner because the PR is
-opened with the release token and would otherwise appear to be authored by
-whoever owns it; everyone else opens their own PR. It checks out full history,
-since the title is built from the commit range ahead of the default branch,
-and skips when a PR is already open for the branch or there are no commits
-ahead of it. See The one secret.
+hook already validated those commits. When the owner's PR from this repository's
+branch into the default branch is already open, it retitles that PR from the same
+commits on every push, up or down: a `feat:` commit added raises a `fix:` title, and
+the same commit dropped lowers it again, so after every push the label the title
+gives is the one *CC label validation* expects. A PR someone else opened, one from a
+fork's branch of the same name, and one into another branch keep their titles. A
+newer push cancels an older push's run, so a title is never built from superseded
+commits, and the retitle's `edited` event re-runs the label checks. Gated to the
+owner because the PR is opened with the release token and would otherwise appear to
+be authored by whoever owns it; everyone else opens and titles their own PR. It
+checks out full history, since the title is built from the commit range ahead of the
+default branch, and does nothing when there are no commits ahead of it. See The one
+secret.
 
 **`release-drafter.yml`** — *Auto draft releases*: on a push to the default branch
 runs release-drafter, which resolves the version from the merged PRs' labels —
@@ -258,7 +265,9 @@ mints a token, so a GitHub App cannot stand in for it: an installation token pas
 the secret works only until it expires, an hour later. It is needed because a PR opened with the default `GITHUB_TOKEN` fires no
 `pull_request_target` event, so no checks would run and the required contexts
 would never report; the PR would be permanently unmergeable, which is how the
-previous auto-PR workflow failed. Every other workflow here uses the calling
+previous auto-PR workflow failed. The same token makes the retitle, for the same
+reason: a title changed with `GITHUB_TOKEN` fires no `edited` event, so the label
+checks would go on judging the old title. Every other workflow here uses the calling
 repository's own `GITHUB_TOKEN`, which a called workflow receives automatically,
 and nothing is passed with `secrets: inherit`.
 
